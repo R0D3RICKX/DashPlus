@@ -3,86 +3,138 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Inter‑Company Scan Demo</title>
+  <title>Inter-Company Scan Demo</title>
   <style>
     * { box-sizing: border-box; }
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #475569;
+      --border: #e2e8f0;
+      --primary: #2563eb;
+      --primary-fg: #ffffff;
+      --chip: #eef2ff;
+    }
     body {
       font-family: system-ui, sans-serif;
       margin: 0;
       padding: 1.5rem;
-      background: #f8fafc;
-      color: #0f172a;
+      background: var(--bg);
+      color: var(--text);
     }
     h1 { font-size: 1.5rem; margin-bottom: 1rem; }
     form {
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
-      margin-bottom: 2rem;
+      margin-bottom: 1rem;
     }
     input[type="text"] {
-      flex: 1 1 200px;
-      padding: 0.5rem 0.75rem;
+      flex: 1 1 240px;
+      padding: 0.6rem 0.8rem;
       border: 1px solid #cbd5e1;
-      border-radius: 0.375rem;
+      border-radius: 0.5rem;
       font-size: 1rem;
+      background: #fff;
     }
     button {
-      padding: 0.5rem 1.25rem;
+      padding: 0.6rem 1.25rem;
       border: none;
-      border-radius: 0.375rem;
-      background: #2563eb;
-      color: white;
+      border-radius: 0.5rem;
+      background: var(--primary);
+      color: var(--primary-fg);
       font-size: 1rem;
       cursor: pointer;
     }
     button:disabled { opacity: 0.6; cursor: not-allowed; }
-    #status { margin-bottom: 1rem; font-weight: 500; }
-    #analysis {
-      white-space: pre-wrap;
-      background: #ffffff;
+    #status { margin: 0.5rem 0 1rem; font-weight: 600; }
+    .meta {
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-bottom: 1rem;
+    }
+    .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 0.4rem;
+      background: var(--chip);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.25rem 0.6rem;
+      font-size: 0.85rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
       padding: 1rem;
-      border-radius: 0.375rem;
-      border: 1px solid #e2e8f0;
-      max-height: 40vh;
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
     }
-    .file-list { margin-top: 1rem; }
-    .file-list h2 { font-size: 1.125rem; margin: 1.5rem 0 0.5rem; }
-    .file-list ul { list-style: none; padding: 0; }
-    .file-list li { margin: 0.25rem 0; }
-    .file-list a {
-      color: #2563eb;
+    .card h3 {
+      margin: 0;
+      font-size: 1.05rem;
+      line-height: 1.2;
+    }
+    .card a {
+      color: var(--primary);
       text-decoration: none;
+      font-weight: 600;
     }
-    .file-list a:hover { text-decoration: underline; }
+    .card a:hover { text-decoration: underline; }
+    details {
+      border-top: 1px dashed var(--border);
+      padding-top: 0.5rem;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .empty {
+      padding: 1rem;
+      border: 1px dashed var(--border);
+      border-radius: 0.75rem;
+      color: var(--muted);
+      background: #fafafa;
+    }
   </style>
 </head>
 <body>
-  <h1>Inter‑Company Scan API Tester</h1>
+  <h1>Inter-Company Scan API Tester</h1>
   <form id="scanForm" onsubmit="event.preventDefault(); runScan();">
     <input id="groupName" type="text" placeholder="Enter parent group name (e.g., Diageo)" required />
     <button id="submitBtn" type="submit">Scan</button>
   </form>
+
   <div id="status"></div>
-  <div id="analysis"></div>
-  <div id="downloads" class="file-list"></div>
+  <div id="meta" class="meta"></div>
+  <div id="companies" class="grid"></div>
 
 <script>
 async function runScan() {
   const group = document.getElementById('groupName').value.trim();
   const statusEl = document.getElementById('status');
-  const analysisEl = document.getElementById('analysis');
-  const dlEl = document.getElementById('downloads');
+  const metaEl = document.getElementById('meta');
+  const gridEl = document.getElementById('companies');
   const btn = document.getElementById('submitBtn');
 
   if (!group) return;
   statusEl.textContent = '⏳ Sending request…';
-  analysisEl.textContent = '';
-  dlEl.innerHTML = '';
+  metaEl.textContent = '';
+  gridEl.innerHTML = '';
   btn.disabled = true;
 
   try {
+    // Change this URL if you're hosting the API elsewhere
     const res = await fetch('https://newapi-pied.vercel.app/api/scan', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -90,38 +142,60 @@ async function runScan() {
     });
 
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || res.statusText);
     }
 
     const data = await res.json();
     statusEl.textContent = '✅ Success';
-    analysisEl.textContent = data.analysis_text || 'No analysis text returned.';
 
-    // Helper to create download links from base64 PDFs
-    function listFiles(arr, title) {
-      if (!Array.isArray(arr) || !arr.length) return;
-      const section = document.createElement('section');
-      const h2 = document.createElement('h2');
-      h2.textContent = title;
-      section.appendChild(h2);
-      const ul = document.createElement('ul');
-      arr.forEach(f => {
-        const li = document.createElement('li');
-        const a = document.createElement('a');
-        const fname = f.filename || `${title}_${f.part || ''}.pdf`;
-        a.textContent = `Download ${fname}`;
-        a.href = `data:application/pdf;base64,${f.pdf_base64}`;
-        a.download = fname;
-        li.appendChild(a);
-        ul.appendChild(li);
-      });
-      section.appendChild(ul);
-      dlEl.appendChild(section);
+    // Meta: group + consolidated URL + timestamp
+    const bits = [];
+    if (data.requested_group) bits.push(`Group: ${data.requested_group}`);
+    if (data.consolidated_pdf_url) {
+      bits.push(`Consolidated PDF: <a href="${data.consolidated_pdf_url}" target="_blank" rel="noopener">open</a>`);
+    }
+    if (data.timestamp) bits.push(`<span class="mono">${data.timestamp}</span>`);
+    if (bits.length) metaEl.innerHTML = bits.join(' • ');
+
+    // Companies grid
+    const companies = Array.isArray(data.companies) ? data.companies : [];
+    if (!companies.length) {
+      gridEl.innerHTML = '<div class="empty">No companies returned.</div>';
+      return;
     }
 
-    listFiles(data.combined_pdfs, 'Combined PDFs');
-    listFiles(data.raw_files, 'Raw PDFs');
+    const frag = document.createDocumentFragment();
+    companies.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const h3 = document.createElement('h3');
+      h3.textContent = c.name || '(Unnamed company)';
+      card.appendChild(h3);
+
+      if (c.accounts_pdf_url) {
+        const a = document.createElement('a');
+        a.href = c.accounts_pdf_url;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = 'Open Accounts PDF';
+        card.appendChild(a);
+      }
+
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = 'Analysis';
+      const pre = document.createElement('div');
+      pre.style.whiteSpace = 'pre-wrap';
+      pre.textContent = c.analysis_text || 'N/A';
+      details.appendChild(summary);
+      details.appendChild(pre);
+      card.appendChild(details);
+
+      frag.appendChild(card);
+    });
+    gridEl.appendChild(frag);
 
   } catch (err) {
     statusEl.textContent = '❌ ' + err.message;
